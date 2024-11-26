@@ -2,6 +2,9 @@ hosts:
   test_servers: 2
   test_clients: 6
 timeout: 1000
+setup:
+  start_agents_once: False
+  start_servers_once: False
 server_config:
   name: daos_server
   engines_per_host: 2
