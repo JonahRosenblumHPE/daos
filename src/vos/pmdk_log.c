@@ -43,6 +43,10 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 {
 	while (((*file_name) != '\0') && !isalpha(*file_name))
 		file_name++;
+	file_name += 3;
+	while (((*file_name) != '\0') && !isalpha(*file_name))
+		file_name++;
+
 /*
  * There is a set of handy macros for each of the message priorities
  * that are used normally to report a message. They can't be used here
