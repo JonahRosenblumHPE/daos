@@ -684,7 +684,6 @@ class DaosServer():
         return True
 
     def _start(self):
-        print("START SERVER")
         """Start a DAOS server"""
         # pylint: disable=consider-using-with
         server_env = get_base_env(clean=True)
