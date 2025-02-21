@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 (C) Copyright 2025 Enakta Labs Ltd
 
@@ -683,12 +684,12 @@ class DaosServer():
         return True
 
     def _start(self):
+        print("START SERVER")
         """Start a DAOS server"""
         # pylint: disable=consider-using-with
         server_env = get_base_env(clean=True)
 
         plain_env = os.environ.copy()
-
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
                              '--gen-suppressions=all',
@@ -772,6 +773,11 @@ class DaosServer():
         self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-', suffix='.yaml')
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
+
+        # Ensure proper environment variable for PMDK w/ NDCTL enabled based on
+        # the actual configuration of the storage class.
+        if engine['storage'][0]['class'] == 'ram':
+            plain_env['PMEMOBJ_CONF'] = "sds.at_create=0"
 
         cmd = [daos_server, 'start', f'--config={self._yaml_file.name}', '--insecure']
 
