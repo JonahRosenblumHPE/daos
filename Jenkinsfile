@@ -704,6 +704,51 @@ pipeline {
                         }
                     }
                 }
+                stage('NLT on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_NLT_1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     inst_repos: prRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages()))
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+                        //                 skipPublishingChecks: true,
+                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
+                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         name: 'NLT server leaks',
+                                         qualityGates: [[threshold: 7, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server')
+                            archiveArtifacts artifacts: 'nlt-server-leaks.json',
+                                allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt-junit.xml',
+                                allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt-errors.json',
+                                allowEmptyArchive: true
+                            job_status_update()
+                        }
+                    }
+                } // stage('NLT on EL 8.8')
             }
         }
         stage('Unit Tests') {
@@ -752,51 +797,6 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_bdev_logs/']
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('NLT on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_NLT_1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     inst_repos: prRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     inst_rpms: unitPackages()))
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
-                        //                 skipPublishingChecks: true,
-                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
-                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 7, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server')
-                            archiveArtifacts artifacts: 'nlt-server-leaks.json',
-                                allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'nlt-junit.xml',
-                                allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'nlt-errors.json',
-                                allowEmptyArchive: true
                             job_status_update()
                         }
                     }
