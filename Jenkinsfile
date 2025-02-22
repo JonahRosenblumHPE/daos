@@ -791,6 +791,12 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
+                            archiveArtifacts artifacts: 'nlt-server-leaks.json',
+                                allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt-junit.xml',
+                                allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt-errors.json',
+                                allowEmptyArchive: true
                             job_status_update()
                         }
                     }
