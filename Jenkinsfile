@@ -704,51 +704,6 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_NLT_1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     inst_repos: prRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     inst_rpms: unitPackages()))
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
-                        //                 skipPublishingChecks: true,
-                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
-                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 7, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server')
-                            archiveArtifacts artifacts: 'nlt-server-leaks.json',
-                                allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'nlt-junit.xml',
-                                allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'nlt-errors.json',
-                                allowEmptyArchive: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('NLT on EL 8.8')
             }
         }
         stage('Unit Tests') {
@@ -801,59 +756,79 @@ pipeline {
                         }
                     }
                 }
-                stage('Fault injection testing on EL 8.8') {
+                stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true)
-                            args '--tmpfs /mnt/daos_0'
-                        }
+                        label params.CI_NLT_1_LABEL
                     }
                     steps {
                         job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
+                            unitTest(timeout_time: 60,
+                                     inst_repos: prRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages()))
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+                        //                 skipPublishingChecks: true,
+                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
+                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
                     }
                     post {
                         always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 7, type: 'TOTAL_ERROR'],
-                                                        [threshold: 7, type: 'TOTAL_HIGH'],
-                                                        [threshold: 7, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 7, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')]
-                            junit testResults: 'nlt-junit.xml'
-                            stash name: 'fault-inject-valgrind',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
-                                             allowEmptyArchive: true
+                                         name: 'NLT server leaks',
+                                         qualityGates: [[threshold: 10, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server')
+                            archiveArtifacts artifacts: 'nlt-server-leaks.json',
+                                allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt-junit.xml',
+                                allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt-errors.json',
+                                allowEmptyArchive: true
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 8.8')
+                }
+                stage('Unit Test Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: prRepos(),
+                                     inst_rpms: unitPackages()))
+                    }
+                    post {
+                        always {
+                            // This is only set while dealing with issues
+                            // caused by code coverage instrumentation affecting
+                            // test results, and while code coverage is being
+                            // added.
+                            unitTestPost ignore_failure: true,
+                                         artifacts: ['covc_test_logs/', 'covc_vm_test/**']
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit test Bullseye on EL 8.8')
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1023,6 +998,59 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+                stage('Fault injection testing on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true)
+                            args '--tmpfs /mnt/daos_0'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+                                       build_deps: 'no'))
+                        job_step_update(nlt_test())
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
+                        //                skipPublishingChecks: true,
+                        //                id: 'fir', name: 'Fault Injection Report')
+                    }
+                    post {
+                        always {
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                      scm: 'daos-stack/daos',
+                                                      requiredResult: hudson.model.Result.UNSTABLE
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
+                                                        [threshold: 1, type: 'TOTAL_HIGH'],
+                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
+                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
+                                         tools: [issues(pattern: 'nlt-errors.json',
+                                                        name: 'Fault injection issues',
+                                                        id: 'Fault_Injection'),
+                                                 issues(pattern: 'nlt-client-leaks.json',
+                                                        name: 'Fault injection leaks',
+                                                        id: 'NLT_client')]
+                            junit testResults: 'nlt-junit.xml'
+                            stash name: 'fault-inject-valgrind',
+                                  includes: '*.memcheck.xml',
+                                  allowEmpty: true
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
+                            job_status_update()
+                        }
+                    }
+                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true

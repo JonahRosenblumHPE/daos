@@ -25,8 +25,10 @@ rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
 mkdir -p vm_test
 
 for i in `ls | grep nlt`; do
-      echo $i
-      cat $i
+      if [ ! -d "$i" ]; then
+            echo $i
+            cat $i
+      fi
 done
 
 mv nlt-errors.json vm_test/
