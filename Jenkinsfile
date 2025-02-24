@@ -795,7 +795,7 @@ pipeline {
                                 allowEmptyArchive: true
                             archiveArtifacts artifacts: 'nlt-junit.xml',
                                 allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'nlt-errors.json',
+                            archiveArtifacts artifacts: 'vm_test/nlt-errors.json',
                                 allowEmptyArchive: true
                             job_status_update()
                         }
