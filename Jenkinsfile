@@ -782,22 +782,15 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck',
-                                         ignore_failure: true
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
                                          name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 10, type: 'TOTAL', unstable: true]],
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
-                            archiveArtifacts artifacts: 'nlt-server-leaks.json',
-                                allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'nlt-junit.xml',
-                                allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'vm_test/nlt-errors.json',
-                                allowEmptyArchive: true
                             job_status_update()
                         }
                     }
