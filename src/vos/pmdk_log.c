@@ -41,15 +41,10 @@ static void
 pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned line_no,
 		  const char *function_name, const char *message)
 {
-	/* normalize file path */
-	/* skip any upper directory reference (../) */
-	while (((*file_name) != '\0') && !isalpha(*file_name))
-		file_name++;
-	/* skip double src if exists */
-	file_name += 3;
-	/* skip any upper directory reference (../) */
-	while (((*file_name) != '\0') && !isalpha(*file_name))
-		file_name++;
+	/* normalize file path - remove leading "../" from the file_name */
+	while ((*file_name == '.') && (*(file_name + 1) == '.') && (*(file_name + 2) == '/')) {
+		file_name += 3;
+	}
 /*
  * There is a set of handy macros for each of the message priorities
  * that are used normally to report a message. They can't be used here
