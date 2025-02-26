@@ -48,7 +48,7 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 
 /* add "pmdk/" prefix to all files names */
 #define PMDK_LOG_FUNCTION_MAX_FILENAME 255
-	char  file_name_buff[PMDK_LOG_FUNCTION_MAX_FILENAME] = "pmdk/";
+	char  file_name_buff[PMDK_LOG_FUNCTION_MAX_FILENAME] = "tg/";
 	char *local_file_name                                = file_name_buff + 5;
 	while ((local_file_name < file_name_buff + PMDK_LOG_FUNCTION_MAX_FILENAME - 1) &&
 	       (*file_name != '\0')) {
