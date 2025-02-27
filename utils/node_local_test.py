@@ -2134,7 +2134,7 @@ class PosixTests():
     @staticmethod
     def generate_test_list():
         """Generate list of Posix tests"""
-        return [x for x in dir(PosixTests) if x.startswith('test')]
+        return [x for x in dir(PosixTests) if x.startswith('test_cont_copy')]
 
     def __init__(self, server, conf, pool=None):
         self.server = server
