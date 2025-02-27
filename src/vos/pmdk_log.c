@@ -46,6 +46,7 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 		file_name += 3;
 	}
 
+#if 0
 /* add "pmdk/" prefix to all files names */
 #define PMDK_LOG_FUNCTION_MAX_FILENAME 255
 	char  file_name_buff[PMDK_LOG_FUNCTION_MAX_FILENAME] = "tg/";
@@ -55,6 +56,7 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 		*(local_file_name++) = *(file_name++);
 	}
 	*local_file_name = '\0';
+#endif
 
 /*
  * There is a set of handy macros for each of the message priorities
@@ -76,7 +78,7 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
  * line number and the function name from the local variables.
  */
 #define PMDK_LOG_NOCHECK(mask, fmt, ...)                                                           \
-	d_log(mask, "%s:%d %s() " fmt, local_file_name, line_no, function_name, ##__VA_ARGS__)
+	d_log(mask, "%s:%d %s() " fmt, file_name, line_no, function_name, ##__VA_ARGS__)
 
 	int *saved_mask = pmemobj_log_level_2_daos_log[level].saved_mask;
 	_D_DEBUG_W_SAVED_MASK(PMDK_LOG_NOCHECK, *saved_mask,
