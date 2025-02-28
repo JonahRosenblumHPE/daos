@@ -16,6 +16,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
+// TO BE REMOVED AFTER https://github.com/daos-stack/pipeline-lib/pull/457 IS MERGED
 @Library(value='pipeline-lib@grom72/daos-16661') _
 
 /* groovylint-disable-next-line CompileStatic */
@@ -1023,6 +1024,8 @@ pipeline {
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
+                                         /* ignore warnign/errors from PMDK logging system */
+                                         filters: [excludeFile('pmdk/.+')],
                                          failOnError: false,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],

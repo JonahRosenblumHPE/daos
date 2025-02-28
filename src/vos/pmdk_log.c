@@ -46,13 +46,18 @@ pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned 
 		file_name += 3;
 	}
 
-/** Add "pmdk/" prefix to file name
-  * Prefix is needed to filtered out PMDK messages in NLT resultst analysis
-  * as it is implemented in https://github.com/daos-stack/pipeline-lib/pull/457
-  */
+	/* simplify file path by removing cyclic pattern "src/../src" */
+	if (strncmp(file_name, "src/../src", sizeof("src/../src") - 1) == 0) {
+		file_name += sizeof("src/../") - 1;
+	}
+
+	/** Add "pmdk/" prefix to file name
+	* Prefix is needed to filtered out PMDK messages in NLT resultst analysis
+	* as it is implemented in https://github.com/daos-stack/pipeline-lib/pull/457
+	*/
 #define PMDK_LOG_FUNCTION_MAX_FILENAME 255
 	char  file_name_buff[PMDK_LOG_FUNCTION_MAX_FILENAME] = "pmdk/";
-	char *local_file_name                                = file_name_buff + 5;
+	char *local_file_name                                = file_name_buff + sizeof("pmdk/") - 1;
 	while ((local_file_name < file_name_buff + PMDK_LOG_FUNCTION_MAX_FILENAME - 1) &&
 	       (*file_name != '\0')) {
 		*(local_file_name++) = *(file_name++);
