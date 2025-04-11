@@ -8,7 +8,6 @@
 import itertools
 import os
 import random
-import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
@@ -77,7 +76,6 @@ class BoundaryTest(TestWithServers):
             except (DaosTestError, TestFail) as err:
                 self.fail(
                     "#(3.{}.{}) container IO failed, err: {}".format(pool.label, cont_num, err))
-        time.sleep(2)  # to sync containers before close
 
         try:
             container.close()
