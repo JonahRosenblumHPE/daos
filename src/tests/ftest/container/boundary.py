@@ -110,7 +110,7 @@ class BoundaryTest(TestWithServers):
         # Use 10 threads per CPU
         container_manager = ThreadManager(
             self.create_container_and_test, self.get_remaining_time() - 60,
-            max_workers=os.cpu_count() * 20)
+            max_workers=os.cpu_count() * 5)
         all_pool_cont_args = list(itertools.product(self.pool, range(num_containers)))
         random.shuffle(all_pool_cont_args)
         for pool, cont_num in all_pool_cont_args:
