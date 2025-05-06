@@ -7,6 +7,7 @@ on:
       - master
       - 'feature/*'
       - 'release/*'
+      - 'gha-runner-tests'
   pull_request:
 
 concurrency:
@@ -22,7 +23,7 @@ jobs:
   # so regressions will be detected but not annotated.
   isort:
     name: Python isort
-    runs-on: ubuntu-latest
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -31,7 +32,7 @@ jobs:
       - name: Set up Python environment
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
-          python-version: '3'
+          python-version: '3.11'
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run isort
@@ -45,7 +46,7 @@ jobs:
 
   shell-check:
     name: ShellCheck
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -63,7 +64,7 @@ jobs:
 
   log-check:
     name: Logging macro checking
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -74,7 +75,7 @@ jobs:
 
   ftest-tags:
     name: Ftest tag check
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -82,7 +83,7 @@ jobs:
         run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     name: Flake8 check
     steps:
       - name: Check out source repository
@@ -92,7 +93,7 @@ jobs:
       - name: Set up Python environment
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
-          python-version: '3'
+          python-version: '3.11'
       - name: Add parser
         run: echo -n "::add-matcher::ci/daos-flake-matcher.json"
       - name: Add whitespace parser
@@ -116,7 +117,7 @@ jobs:
 
   doxygen:
     name: Doxygen
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -137,7 +138,7 @@ jobs:
 
   pylint:
     name: Pylint check
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -157,10 +158,14 @@ jobs:
 
   codespell:
     name: Codespell
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      - name: Set up Python environment
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.11'
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
@@ -172,7 +177,7 @@ jobs:
 
   clang-format:
     name: Clang Format
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -191,7 +196,7 @@ jobs:
 
   yaml-lint:
     name: Yamllint check
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -200,7 +205,7 @@ jobs:
       - name: Set up Python environment
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
-          python-version: '3'
+          python-version: '3.11'
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
@@ -208,7 +213,7 @@ jobs:
 
   copyright:
     name: Copyright check
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     steps:
       - name: Check out source repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
@@ -222,7 +227,7 @@ jobs:
 
   linting-summary:
     name: Linting Summary
-    runs-on: ubuntu-24.04
+    runs-on: gcp-test
     needs:
       - isort
       - shell-check
