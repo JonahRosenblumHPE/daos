@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -355,6 +356,122 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	return buf_len;
 }
 
+#define HEADER_LEN sizeof(struct drpc_header)
+#define CHUNK_SIZE(bytes_left)                                                                     \
+	(bytes_left > MAX_DATA_SIZE ? UNIXCOMM_MAXMSGSIZE : bytes_left + HEADER_LEN)
+#define CHUNK_DATA_SIZE(bytes) (bytes - HEADER_LEN)
+#define MAX_DATA_SIZE          CHUNK_DATA_SIZE(UNIXCOMM_MAXMSGSIZE)
+#define CHUNK_DATA_PTR(ptr)    (ptr + HEADER_LEN)
+
+static int
+send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
+{
+	size_t   remaining_len = msg_len;
+	uint8_t *remaining_msg = msg;
+	size_t   chunk_idx     = 0;
+	size_t   num_chunks    = msg_len / MAX_DATA_SIZE;
+
+	if (msg_len % MAX_DATA_SIZE != 0)
+		num_chunks++;
+
+	do {
+		uint8_t            *chunk_buf = NULL;
+		size_t              chunk_len = CHUNK_SIZE(remaining_len);
+		struct drpc_header *header;
+		ssize_t             sent = 0;
+		int                 rc;
+
+		D_ALLOC(chunk_buf, chunk_len);
+		if (chunk_buf == NULL) {
+			D_ERROR("failed to allocate buffer for chunk (idx=%lu, size=%lu)",
+				chunk_idx, chunk_len);
+			return -DER_NOMEM;
+		}
+
+		header                  = (struct drpc_header *)chunk_buf;
+		header->chunk_idx       = chunk_idx;
+		header->total_chunks    = num_chunks;
+		header->chunk_data_size = CHUNK_DATA_SIZE(chunk_len);
+		header->total_data_size = msg_len;
+
+		memcpy(CHUNK_DATA_PTR(chunk_buf), remaining_msg, CHUNK_DATA_SIZE(chunk_len));
+
+		rc = unixcomm_send(ctx->comm, chunk_buf, chunk_len, &sent);
+		D_FREE(chunk_buf);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to send dRPC chunk (idx=%lu, size=%lu)", chunk_idx,
+				 chunk_len);
+			return rc;
+		}
+
+		D_ASSERT(sent == chunk_len);
+		remaining_len -= sent;
+		remaining_msg += sent;
+	} while (remaining_len > 0);
+	return 0;
+}
+
+static int
+recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
+{
+	int      rc;
+	uint8_t *buffer; /* reusable chunking buffer */
+	size_t   buffer_size       = UNIXCOMM_MAXMSGSIZE;
+	uint8_t *message           = NULL;
+	size_t   message_size      = 0;
+	uint8_t *message_ptr       = NULL;
+	size_t   message_remaining = 0;
+
+	D_ASSERT(msg_len != NULL);
+	D_ASSERT(msg != NULL);
+
+	D_ALLOC(buffer, buffer_size);
+	if (buffer == NULL)
+		return -DER_NOMEM;
+
+	do {
+		struct drpc_header *header;
+		ssize_t             recv = 0;
+
+		rc = unixcomm_recv(ctx->comm, buffer, buffer_size, &recv);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		if (recv < HEADER_LEN) {
+			D_GOTO(out, rc = -DER_TRUNC);
+		}
+
+		header = (struct drpc_header *)buffer;
+		if (message == NULL) {
+			/* allocate the full message buffer */
+			message_size = header->total_data_size;
+			D_ALLOC(message, message_size);
+			if (message == NULL)
+				D_GOTO(out, -DER_NOMEM);
+			message_ptr = message;
+		}
+
+		if (header->chunk_data_size > message_remaining) {
+			D_ERROR(
+			    "chunk (idx=%u/%u, size=%lu) would overrun remaining message len=%lu\n",
+			    header->chunk_idx, header->total_chunks, header->chunk_data_size,
+			    message_remaining);
+			D_GOTO(out, rc = -DER_TRUNC);
+		}
+
+		memcpy(message_ptr, CHUNK_DATA_PTR(buffer), header->chunk_data_size);
+		message_ptr += header->chunk_data_size;
+		message_remaining -= header->chunk_data_size;
+	} while (message_remaining > 0);
+
+	*msg     = message;
+	*msg_len = message_size;
+
+out:
+	D_FREE(buffer);
+	return rc;
+}
+
 /**
  * Issue a call over a drpc channel
  *
@@ -369,21 +486,20 @@ int
 drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 			Drpc__Response **resp)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc_alloc        alloc    = PROTO_ALLOCATOR_INIT(alloc);
 	Drpc__Response		*response = NULL;
-	uint8_t			*messagePb;
-	uint8_t			*responseBuf;
-	int			pbLen;
-	ssize_t			sent;
-	ssize_t			recv = 0;
-	int			ret;
+	uint8_t                 *messagePb;
+	uint8_t                 *responseBuf;
+	int                      pbLen;
+	size_t                   response_len = 0;
+	int                      ret;
 
 	msg->sequence = ctx->sequence++;
 	pbLen = drpc_marshal_call(msg, &messagePb);
 	if (pbLen < 0)
 		return pbLen;
 
-	ret = unixcomm_send(ctx->comm, messagePb, pbLen, &sent);
+	ret = send_chunked(ctx, messagePb, pbLen);
 	D_FREE(messagePb);
 
 	if (ret < 0)
@@ -396,21 +512,17 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		return 0;
 	}
 
-	D_ALLOC(responseBuf, UNIXCOMM_MAXMSGSIZE);
-	if (!responseBuf)
-		return -DER_NOMEM;
-
-	ret = unixcomm_recv(ctx->comm, responseBuf, UNIXCOMM_MAXMSGSIZE, &recv);
+	ret = recv_chunked(ctx, &responseBuf, &response_len);
 	if (ret < 0) {
 		D_FREE(responseBuf);
 		return ret;
 	}
-	response = drpc__response__unpack(&alloc.alloc, recv, responseBuf);
+	response = drpc__response__unpack(&alloc.alloc, response_len, responseBuf);
 	D_FREE(responseBuf);
 	if (alloc.oom)
 		return -DER_NOMEM;
 	if (!response)
-		return -DER_MISC;
+		return -DER_PROTO;
 
 	*resp = response;
 	return 0;
@@ -582,33 +694,26 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 static int
 get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int			rc;
-	uint8_t			*buffer;
-	size_t			buffer_size = UNIXCOMM_MAXMSGSIZE;
-	ssize_t			message_len = 0;
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int               rc;
+	uint8_t          *message      = NULL;
+	size_t            message_size = 0;
 
-	D_ALLOC(buffer, buffer_size);
-	if (buffer == NULL)
-		return -DER_NOMEM;
+	rc = recv_chunked(ctx, &message, &message_size);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
-	rc = unixcomm_recv(ctx->comm, buffer, buffer_size,
-				&message_len);
-	if (rc != 0) {
-		D_FREE(buffer);
-		return rc;
-	}
-
-	*call = drpc__call__unpack(&alloc.alloc, message_len, buffer);
-	D_FREE(buffer);
+	*call = drpc__call__unpack(&alloc.alloc, message_size, message);
 	if (alloc.oom)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 	if (*call == NULL) {
 		D_ERROR("Couldn't unpack message into Drpc__Call\n");
-		return -DER_PROTO;
+		D_GOTO(out, rc = -DER_PROTO);
 	}
 
-	return 0;
+out:
+	D_FREE(message);
+	return rc;
 }
 
 /**
