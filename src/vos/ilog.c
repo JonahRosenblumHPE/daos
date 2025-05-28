@@ -1630,3 +1630,58 @@ ilog_version_get(daos_handle_t loh)
 
 	return ilog_mag2ver(lctx->ic_root->lr_magic);
 }
+
+int
+ilog_entry_replace(daos_handle_t loh, struct ilog_id *id, uint32_t lid)
+{
+	struct ilog_context    *lctx;
+	struct ilog_root       *root;
+	struct ilog_array_cache cache;
+	int                     rc;
+	int                     i;
+
+	D_ASSERT(id->id_epoch != 0);
+	D_ASSERT(id->id_tx_id != lid);
+	D_ASSERT(id->id_tx_id >= DTX_LID_RESERVED);
+	D_ASSERT(lid >= DTX_LID_RESERVED);
+
+	lctx = ilog_hdl2lctx(loh);
+	if (lctx == NULL) {
+		D_ERROR("Invalid log handle\n");
+		return -DER_INVAL;
+	}
+
+	D_ASSERT(!lctx->ic_in_txn);
+
+	root = lctx->ic_root;
+	if (ilog_empty(root))
+		return -DER_NONEXIST;
+
+	if (root->lr_tree.it_embedded) {
+		if (root->lr_id.id_epoch != id->id_epoch || root->lr_id.id_tx_id != id->id_tx_id)
+			return -DER_NONEXIST;
+
+		rc = ilog_ptr_set(lctx, &root->lr_id.id_tx_id, &lid);
+	} else {
+		rc = -DER_NONEXIST;
+		ilog_log2cache(lctx, &cache);
+		for (i = cache.ac_nr - 1; i >= 0; i--) {
+			if (cache.ac_entries[i].id_epoch < id->id_epoch)
+				break;
+
+			if (cache.ac_entries[i].id_epoch == id->id_epoch &&
+			    cache.ac_entries[i].id_tx_id == id->id_tx_id) {
+				rc = ilog_ptr_set(lctx, &cache.ac_entries[i].id_tx_id, &lid);
+				break;
+			}
+		}
+	}
+
+	return ilog_tx_end(lctx, rc);
+}
+
+bool
+vos_ilog_is_valid(struct ilog_df *ilog, uint32_t dtx_lid)
+{
+	return ILOG_CHECK_VALID(ilog);
+}

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,6 +157,17 @@ ilog_persist(daos_handle_t loh, const struct ilog_id *id);
  */
 int
 ilog_abort(daos_handle_t loh, const struct ilog_id *id);
+
+/** Replace TX local ID for specified ilog entry
+ *
+ *  \param	loh[in]		Open log handle
+ *  \param	id[in]		Identifier for log entry
+ *  \param	lid[id]		New TX LID for the log entry
+ *
+ *  \return 0 on success, error code on failure
+ */
+int
+ilog_entry_replace(daos_handle_t loh, struct ilog_id *id, uint32_t lid);
 
 /** Incarnation log entry description */
 struct ilog_entry {
