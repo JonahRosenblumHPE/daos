@@ -4,6 +4,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(common)
 
 #include <daos/common.h>
 #include <daos/drpc.h>
@@ -27,7 +28,7 @@ void *
 daos_drpc_alloc(void *arg, size_t size)
 {
 	struct drpc_alloc *alloc = arg;
-	void *buf;
+	void              *buf;
 
 	D_ALLOC(buf, size);
 	if (!buf)
@@ -53,8 +54,7 @@ daos_drpc_free(void *allocater_data, void *pointer)
  * \returns	On success returns 0 otherwise returns negative error condition.
  */
 int
-drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
-		 Drpc__Call **callp)
+drpc_call_create(struct drpc *ctx, int32_t module, int32_t method, Drpc__Call **callp)
 {
 	Drpc__Call *call;
 
@@ -72,8 +72,8 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
 
 	drpc__call__init(call);
 	call->sequence = ctx->sequence;
-	call->module = module;
-	call->method = method;
+	call->module   = module;
+	call->method   = method;
 
 	*callp = call;
 
@@ -141,13 +141,12 @@ unixcomm_close(struct unixcomm *handle)
 	if (!handle)
 		return 0;
 
-	fd = handle->fd;
+	fd  = handle->fd;
 	ret = close(fd);
 	D_FREE(handle);
 
 	if (ret < 0) {
-		D_ERROR("Failed to close socket fd %d, errno=%d\n",
-			fd, errno);
+		D_ERROR("Failed to close socket fd %d, errno=%d\n", fd, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -157,7 +156,7 @@ unixcomm_close(struct unixcomm *handle)
 static int
 new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 {
-	struct unixcomm	*comm;
+	struct unixcomm *comm;
 
 	*newcommp = NULL;
 
@@ -177,8 +176,7 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
-			comm->fd, rc);
+		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n", comm->fd, rc);
 		unixcomm_close(comm);
 		return daos_errno2der(rc);
 	}
@@ -186,7 +184,7 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	comm->flags = flags;
 
 	/** Socket file to be readable and writable by user only */
-	if (fchmod(comm->fd, S_IRUSR|S_IWUSR) != 0) {
+	if (fchmod(comm->fd, S_IRUSR | S_IWUSR) != 0) {
 		int rc = errno;
 
 		D_ERROR("Failed to set access permissions on socket fd %d, errno=%d(%s)\n",
@@ -212,9 +210,9 @@ fill_socket_address(const char *sockpath, struct sockaddr_un *address)
 static int
 unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 {
-	struct sockaddr_un	address;
-	int			ret;
-	struct unixcomm		*handle = NULL;
+	struct sockaddr_un address;
+	int                ret;
+	struct unixcomm   *handle = NULL;
 
 	*newcommp = NULL;
 
@@ -227,8 +225,8 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 	if (connect(handle->fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
-			address.sun_path, rc, strerror(rc));
+		D_ERROR("Failed to connect to %s, errno=%d(%s)\n", address.sun_path, rc,
+			strerror(rc));
 		unixcomm_close(handle);
 		return daos_errno2der(rc);
 	}
@@ -241,9 +239,9 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 static int
 unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 {
-	struct sockaddr_un	address;
-	struct unixcomm		*comm;
-	int			ret;
+	struct sockaddr_un address;
+	struct unixcomm   *comm;
+	int                ret;
 
 	*newcommp = NULL;
 
@@ -255,8 +253,8 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 	if (bind(comm->fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
-			sockaddr, comm->fd, rc);
+		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n", sockaddr, comm->fd,
+			rc);
 		unixcomm_close(comm);
 		return daos_errno2der(rc);
 	}
@@ -264,8 +262,7 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 	if (listen(comm->fd, SOMAXCONN) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
-			comm->fd, rc);
+		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n", comm->fd, rc);
 		unixcomm_close(comm);
 		return daos_errno2der(rc);
 	}
@@ -276,25 +273,23 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 }
 
 static int
-unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
-		ssize_t *sent)
+unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen, ssize_t *sent)
 {
-	int		ret;
-	struct iovec	iov[1];
-	struct msghdr	msg;
-	ssize_t		bsent;
+	int           ret;
+	struct iovec  iov[1];
+	struct msghdr msg;
+	ssize_t       bsent;
 
 	memset(&msg, 0, sizeof(msg));
 
 	iov[0].iov_base = buffer;
-	iov[0].iov_len = buflen;
-	msg.msg_iov = iov;
-	msg.msg_iovlen = 1;
+	iov[0].iov_len  = buflen;
+	msg.msg_iov     = iov;
+	msg.msg_iovlen  = 1;
 
 	bsent = sendmsg(hndl->fd, &msg, 0);
 	if (bsent < 0) {
-		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
-			hndl->fd, errno);
+		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n", hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
 		if (sent != NULL)
@@ -305,25 +300,23 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 }
 
 static int
-unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
-		ssize_t *rcvd)
+unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen, ssize_t *rcvd)
 {
-	int		ret;
-	struct iovec	iov[1];
-	struct msghdr	msg;
-	ssize_t		brcvd;
+	int           ret;
+	struct iovec  iov[1];
+	struct msghdr msg;
+	ssize_t       brcvd;
 
 	memset(&msg, 0, sizeof(msg));
 
 	iov[0].iov_base = buffer;
-	iov[0].iov_len = buflen;
-	msg.msg_iov = iov;
-	msg.msg_iovlen = 1;
+	iov[0].iov_len  = buflen;
+	msg.msg_iov     = iov;
+	msg.msg_iovlen  = 1;
 
 	brcvd = recvmsg(hndl->fd, &msg, 0);
 	if (brcvd < 0) {
-		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
-			hndl->fd, errno);
+		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n", hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
 		if (rcvd != NULL)
@@ -336,8 +329,8 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 static int
 drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 {
-	int	buf_len;
-	uint8_t	*buf;
+	int      buf_len;
+	uint8_t *buf;
 
 	if (!msg) {
 		D_ERROR("NULL Drpc__Call\n");
@@ -374,13 +367,21 @@ send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
 	if (msg_len % MAX_DATA_SIZE != 0)
 		num_chunks++;
 
+	D_DEBUG(DB_TRACE, "sending dRPC message (len=%lu) in %lu chunks\n", msg_len, num_chunks);
+
 	do {
 		uint8_t            *chunk_buf = NULL;
 		size_t              chunk_len = CHUNK_SIZE(remaining_len);
+		size_t              data_len  = CHUNK_DATA_SIZE(chunk_len);
 		struct drpc_header *header;
 		ssize_t             sent = 0;
 		int                 rc;
 
+		D_ASSERT(chunk_idx < num_chunks);
+		D_ASSERT(remaining_len >= data_len);
+
+		D_DEBUG(DB_TRACE, "allocating chunk %lu/%lu, data_len=%lu, total=%lu\n",
+			chunk_idx + 1, num_chunks, data_len, chunk_len);
 		D_ALLOC(chunk_buf, chunk_len);
 		if (chunk_buf == NULL) {
 			D_ERROR("failed to allocate buffer for chunk (idx=%lu, size=%lu)",
@@ -391,7 +392,7 @@ send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
 		header                  = (struct drpc_header *)chunk_buf;
 		header->chunk_idx       = chunk_idx;
 		header->total_chunks    = num_chunks;
-		header->chunk_data_size = CHUNK_DATA_SIZE(chunk_len);
+		header->chunk_data_size = data_len;
 		header->total_data_size = msg_len;
 
 		memcpy(CHUNK_DATA_PTR(chunk_buf), remaining_msg, CHUNK_DATA_SIZE(chunk_len));
@@ -403,10 +404,12 @@ send_chunked(struct drpc *ctx, uint8_t *msg, size_t msg_len)
 				 chunk_len);
 			return rc;
 		}
+		D_DEBUG(DB_TRACE, "sent %ld bytes\n", sent);
 
 		D_ASSERT(sent == chunk_len);
-		remaining_len -= sent;
-		remaining_msg += sent;
+		remaining_len -= data_len;
+		remaining_msg += data_len;
+		chunk_idx++;
 	} while (remaining_len > 0);
 	return 0;
 }
@@ -421,6 +424,8 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 	size_t   message_size      = 0;
 	uint8_t *message_ptr       = NULL;
 	size_t   message_remaining = 0;
+	uint32_t chunk_idx         = 0;
+	uint32_t num_chunks        = 0;
 
 	D_ASSERT(msg_len != NULL);
 	D_ASSERT(msg != NULL);
@@ -438,13 +443,21 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 			D_GOTO(out, rc);
 
 		if (recv < HEADER_LEN) {
+			D_ERROR("received dRPC message len=%ld, smaller than expected header "
+				"size=%lu\n",
+				recv, HEADER_LEN);
 			D_GOTO(out, rc = -DER_TRUNC);
 		}
 
 		header = (struct drpc_header *)buffer;
 		if (message == NULL) {
 			/* allocate the full message buffer */
-			message_size = header->total_data_size;
+			message_size      = header->total_data_size;
+			message_remaining = message_size;
+			num_chunks        = header->total_chunks;
+			D_DEBUG(DB_TRACE, "receiving dRPC message len=%lu, num_chunks=%u\n",
+				message_size, num_chunks);
+
 			D_ALLOC(message, message_size);
 			if (message == NULL)
 				D_GOTO(out, -DER_NOMEM);
@@ -454,14 +467,36 @@ recv_chunked(struct drpc *ctx, uint8_t **msg, size_t *msg_len)
 		if (header->chunk_data_size > message_remaining) {
 			D_ERROR(
 			    "chunk (idx=%u/%u, size=%lu) would overrun remaining message len=%lu\n",
-			    header->chunk_idx, header->total_chunks, header->chunk_data_size,
+			    header->chunk_idx + 1, header->total_chunks, header->chunk_data_size,
 			    message_remaining);
 			D_GOTO(out, rc = -DER_TRUNC);
 		}
 
+		if (header->total_chunks != num_chunks) {
+			D_ERROR("malformed header, total chunks=%u, has changed from previous "
+				"reported %u\n",
+				header->total_chunks, num_chunks);
+			D_GOTO(out, rc = -DER_PROTO);
+		}
+
+		if (header->chunk_idx >= num_chunks) {
+			D_ERROR("malformed header, chunk_idx=%u, expected exactly %u chunks\n",
+				header->chunk_idx, num_chunks);
+			D_GOTO(out, rc = -DER_PROTO);
+		}
+
+		if (header->chunk_idx != chunk_idx) {
+			D_ERROR("possible dropped chunk, got chunk_idx=%u (expected idx=%u next)\n",
+				header->chunk_idx, chunk_idx);
+			D_GOTO(out, rc = -DER_MISMATCH);
+		}
+
+		D_DEBUG(DB_TRACE, "receiving chunk %u/%u\n", header->chunk_idx + 1,
+			header->total_chunks);
 		memcpy(message_ptr, CHUNK_DATA_PTR(buffer), header->chunk_data_size);
 		message_ptr += header->chunk_data_size;
 		message_remaining -= header->chunk_data_size;
+		chunk_idx++;
 	} while (message_remaining > 0);
 
 	*msg     = message;
@@ -483,19 +518,18 @@ out:
  * \returns	On success returns 0 otherwise returns negative error condition.
  */
 int
-drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
-			Drpc__Response **resp)
+drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg, Drpc__Response **resp)
 {
-	struct drpc_alloc        alloc    = PROTO_ALLOCATOR_INIT(alloc);
-	Drpc__Response		*response = NULL;
-	uint8_t                 *messagePb;
-	uint8_t                 *responseBuf;
-	int                      pbLen;
-	size_t                   response_len = 0;
-	int                      ret;
+	struct drpc_alloc alloc    = PROTO_ALLOCATOR_INIT(alloc);
+	Drpc__Response   *response = NULL;
+	uint8_t          *messagePb;
+	uint8_t          *responseBuf;
+	int               pbLen;
+	size_t            response_len = 0;
+	int               ret;
 
 	msg->sequence = ctx->sequence++;
-	pbLen = drpc_marshal_call(msg, &messagePb);
+	pbLen         = drpc_marshal_call(msg, &messagePb);
 	if (pbLen < 0)
 		return pbLen;
 
@@ -506,9 +540,9 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 		return ret;
 
 	if (!(flags & R_SYNC)) {
-		response = drpc_response_create(msg);
+		response         = drpc_response_create(msg);
 		response->status = DRPC__STATUS__SUBMITTED;
-		*resp = response;
+		*resp            = response;
 		return 0;
 	}
 
@@ -531,9 +565,9 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 static void
 init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
 {
-	ctx->comm = comm;
-	ctx->handler = handler;
-	ctx->sequence = 0;
+	ctx->comm      = comm;
+	ctx->handler   = handler;
+	ctx->sequence  = 0;
 	ctx->ref_count = 1;
 }
 
@@ -548,9 +582,9 @@ init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
 int
 drpc_connect(char *sockaddr, struct drpc **drpcp)
 {
-	struct drpc	*ctx;
-	struct unixcomm	*comms;
-	int		ret;
+	struct drpc     *ctx;
+	struct unixcomm *comms;
+	int              ret;
 
 	*drpcp = NULL;
 
@@ -584,13 +618,12 @@ drpc_connect(char *sockaddr, struct drpc **drpcp)
 struct drpc *
 drpc_listen(char *sockaddr, drpc_handler_t handler)
 {
-	struct drpc	*ctx;
+	struct drpc     *ctx;
 	struct unixcomm *comm;
-	int		rc;
+	int              rc;
 
 	if (sockaddr == NULL || handler == NULL) {
-		D_ERROR("Bad input, sockaddr=%p, handler=%p\n",
-			sockaddr, handler);
+		D_ERROR("Bad input, sockaddr=%p, handler=%p\n", sockaddr, handler);
 		return NULL;
 	}
 
@@ -637,8 +670,8 @@ drpc_is_valid_listener(struct drpc *ctx)
 int
 drpc_accept(struct drpc *listener_ctx, struct drpc **drpc)
 {
-	struct drpc	*session_ctx;
-	struct unixcomm	*comm;
+	struct drpc     *session_ctx;
+	struct unixcomm *comm;
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
 		D_ERROR("dRPC context is not a listener\n");
@@ -674,9 +707,9 @@ drpc_accept(struct drpc *listener_ctx, struct drpc **drpc)
 static int
 send_response(struct drpc *ctx, Drpc__Response *response)
 {
-	int	rc;
-	size_t	buffer_len;
-	uint8_t	*buffer;
+	int      rc;
+	size_t   buffer_len;
+	uint8_t *buffer;
 
 	buffer_len = drpc__response__get_packed_size(response);
 
@@ -685,7 +718,7 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 		return -DER_NOMEM;
 
 	drpc__response__pack(response, buffer);
-	rc = unixcomm_send(ctx->comm, buffer, buffer_len, NULL);
+	rc = send_chunked(ctx, buffer, buffer_len);
 
 	D_FREE(buffer);
 	return rc;
@@ -790,8 +823,8 @@ drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
 int
 drpc_close(struct drpc *ctx)
 {
-	int		ret;
-	uint32_t	new_count;
+	int      ret;
+	uint32_t new_count;
 
 	if (!ctx || !ctx->comm) {
 		D_ERROR("Context is already closed\n");
@@ -803,14 +836,13 @@ drpc_close(struct drpc *ctx)
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_MGMT, "Decrementing refcount (%u)\n",
-		ctx->ref_count);
+	D_DEBUG(DB_TRACE, "Decrementing refcount (%u)\n", ctx->ref_count);
 	ctx->ref_count--;
 
 	new_count = ctx->ref_count;
 
 	if (new_count == 0) {
-		D_DEBUG(DB_MGMT, "Closing dRPC socket fd=%d\n", ctx->comm->fd);
+		D_DEBUG(DB_TRACE, "Closing dRPC socket fd=%d\n", ctx->comm->fd);
 
 		ret = unixcomm_close(ctx->comm);
 		if (ret != 0)
@@ -839,8 +871,7 @@ drpc_add_ref(struct drpc *ctx)
 	}
 
 	if (ctx->ref_count == UINT_MAX) {
-		D_ERROR("Can't increment current ref count (count=%u)\n",
-			ctx->ref_count);
+		D_ERROR("Can't increment current ref count (count=%u)\n", ctx->ref_count);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -848,4 +879,3 @@ drpc_add_ref(struct drpc *ctx)
 out:
 	return rc;
 }
-

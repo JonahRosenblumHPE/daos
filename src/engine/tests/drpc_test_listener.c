@@ -16,9 +16,10 @@
 #include <abt.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <daos/tests_lib.h>
+#include <daos/drpc_test.pb-c.h>
 #include "drpc_test_listener.h"
 #include "../drpc_internal.h"
-#include <daos/drpc_test.pb-c.h>
 
 #define GREETING_STR "Hello"
 
@@ -186,8 +187,11 @@ drpc_listener_setup(void **state)
 	char *template;
 	int rc = 0;
 
-	D_PRINT("= SETUP: start\n");
+	D_PRINT("LISTENER SETUP: start\n");
 	assert_non_null(state);
+
+	rc = d_log_init();
+	assert_rc_equal(rc, 0);
 
 	D_ALLOC_PTR(dts);
 	assert_non_null(dts);
@@ -208,7 +212,7 @@ drpc_listener_setup(void **state)
 
 	*state = dts;
 
-	D_PRINT("= SETUP: done\n");
+	D_PRINT("LISTENER SETUP: done\n");
 	return rc;
 }
 
@@ -217,6 +221,8 @@ drpc_listener_teardown(void **state)
 {
 	struct drpc_test_state *dts;
 	bool                    errored = false;
+
+	D_PRINT("LISTENER TEARDOWN: start\n");
 
 	assert_true(is_parent);
 	assert_non_null(state);
@@ -249,6 +255,10 @@ drpc_listener_teardown(void **state)
 
 	drpc_test_state_free(dts);
 	*state = NULL;
+
+	d_log_fini();
+
+	D_PRINT("LISTENER TEARDOWN: done\n");
 
 	if (errored)
 		return -1;
