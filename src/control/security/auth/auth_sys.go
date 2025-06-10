@@ -101,6 +101,11 @@ type (
 		getGroupIds   getGroupIdsFn
 		getGroupNames getGroupNamesFn
 	}
+
+	Info struct {
+		Identity string  `json:"id"`
+		Roles []string  `json:"roles"`
+	}
 )
 
 func getGroupIds(req *CredentialRequest) ([]string, error) {
@@ -285,6 +290,74 @@ func GetSignedCredential(ctx context.Context, req *CredentialRequest) (*Credenti
 		Origin:   "agent"}
 
 	logging.FromContext(ctx).Tracef("%s: successfully signed credential", req.DomainInfo)
+	return &credential, nil
+}
+
+// GetSignedCredential returns a credential based on the provided domain info and
+// signing key.
+func GetSignedCredentialAM(ctx context.Context, credInfo *Info, signingKey crypto.PrivateKey) (*Credential, error) { // I can rip out CredentialRequest with my own info.
+	// DAOS is built with UNIX groups in mind. We cannot use the AM-style URLS as they contain colons, and do not end with an '@'.
+	// This function helps parse out the path.
+	seperate := func(url string) (string, string, error) {
+		var split_url = strings.Split(url, "://")
+		if len(split_url) != 2 {
+			return "", "", errors.New("Access manager url does not follow expected format 'foo://bar'")
+		}
+		split_url[0] += "://"
+		split_url[1] += "@am"
+		return split_url[0], split_url[1], nil
+	}
+
+	var machine_name, identity, err = seperate(credInfo.Identity)
+
+	if (err != nil) {
+		return nil, err
+	}
+	
+	groups := make([]string, len(credInfo.Roles))
+	for i := range groups {
+		var _, role, err = seperate(credInfo.Roles[i])
+		if (err != nil) {
+			return nil, err
+		}
+		groups[i] = role
+	}
+
+	// Craft AuthToken
+	sys := Sys{
+		Stamp:       0,
+		Machinename: machine_name,
+		User:        identity,
+		Group:       "",
+		Groups:      groups,
+		Secctx:      ""}
+
+	// Marshal our AuthSys token into a byte array
+	tokenBytes, err := proto.Marshal(&sys)
+	if err != nil {
+		return nil, errors.Wrap(err, "Unable to marshal AuthSys token")
+	}
+
+	token := Token{
+		Flavor: Flavor_AUTH_SYS,
+		Data:   tokenBytes}
+
+	verifier, err := VerifierFromToken(signingKey, &token)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Unable to generate verifier")
+	}
+
+	verifierToken := Token{
+		Flavor: Flavor_AUTH_SYS,
+		Data:   verifier}
+
+	credential := Credential{
+		Token:    &token,
+		Verifier: &verifierToken,
+		Origin:   "agent"}
+
+	logging.FromContext(ctx).Tracef("%s: successfully signed credential", credInfo)
+
 	return &credential, nil
 }
 

@@ -89,6 +89,7 @@ func (m securityAgentMethod) ID() int32 {
 func (m securityAgentMethod) String() string {
 	if s, ok := map[securityAgentMethod]string{
 		MethodRequestCredentials: "request agent credentials",
+		MethodRequestCredentialsAM: "request access manager credentials from the agent",
 	}[m]; ok {
 		return s
 	}
@@ -110,6 +111,8 @@ func (m securityAgentMethod) IsValid() bool {
 const (
 	// MethodRequestCredentials is a ModuleSecurityAgent method
 	MethodRequestCredentials securityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
+	// MethodRequestCredentialsAM is a ModuleSecurityAgent method
+	MethodRequestCredentialsAM securityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS_AM
 )
 
 type MgmtMethod int32
