@@ -58,17 +58,20 @@ get_delegation_token(const char *delegation_token_filename, uint8_t **token_buff
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(*token_buffer, MAX_DELEGATION_TOKEN_SIZE);
+	D_ALLOC(*token_buffer, MAX_DELEGATION_TOKEN_SIZE + AGENT_AUTH_METHOD_NAME_SIZE);
 	if (token_buffer == NULL) {
 		D_ERROR("Failed to allocate buffer for delegation token.\n");
 		return -DER_NOMEM;
 	}
 
-	*token_buffer_length = fread(*token_buffer, 1, MAX_DELEGATION_TOKEN_SIZE, token_fptr);
+	// Save the first AGENT_AUTH_METHOD_NAME_SIZE bytes for the method name
+	*token_buffer_length = fread(*token_buffer + AGENT_AUTH_METHOD_NAME_SIZE, 1, MAX_DELEGATION_TOKEN_SIZE, token_fptr);
 	if (*token_buffer_length == 0) {
 		D_ERROR("Found an empty file.\n");
 		return -DER_INVAL;
 	}
+	// Add length of method name to total buffer size
+	*token_buffer_length += AGENT_AUTH_METHOD_NAME_SIZE;
 
 	fclose(token_fptr);
 	return -DER_SUCCESS;
@@ -97,7 +100,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 	
 	rc = drpc_call_create(agent_socket,
 			      DRPC_MODULE_SEC_AGENT,
-			      use_access_manager ? DRPC_METHOD_SEC_AGENT_REQUEST_CREDS_AM : DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
+			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
 			      &request);
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("Couldn't allocate dRPC call "DF_RC"\n", DP_RC(rc));
@@ -107,6 +110,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 
 	if (use_access_manager) {
 		rc = get_delegation_token(delegation_token_path, &token_buffer, &token_buffer_length);
+		memcpy(token_buffer, AGENT_AUTH_METHOD_AM, AGENT_AUTH_METHOD_NAME_SIZE);
 		if (rc != -DER_SUCCESS) {
 			D_ERROR("Error in retrieving delegation token\n");
 			return rc;

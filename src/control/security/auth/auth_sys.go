@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"reflect"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -82,10 +84,57 @@ func CredentialRequestGetSigned(ctx context.Context, log logging.Logger, req Cre
 	return req.GetSignedCredential(log, ctx)
 }
 
+func StrToAuthTag(str string) (AuthTag, error) {
+	var authNameBuffer AuthTag
+	if len(str) != AuthTagSize {
+		return authNameBuffer, fmt.Errorf("auth string '%s' is the wrong length. Expected %d, got %d", str, AuthTagSize, len(str))
+	}
+	copy(authNameBuffer[:], str)
+	return authNameBuffer, nil
+}
+
+func getAuthName(authNameStr string) AuthTag {
+	tag, err := StrToAuthTag(authNameStr)
+	if (err != nil) {
+		panic(errors.Wrap(err, "Check your interface implementation of 'GetAuthName' to ensure name is proper length"))
+	}
+	return tag
+}
+
+func registerAllAuthenticationMethods() AuthMap {
+	var ar = make(map[AuthTag]reflect.Type)
+	for _, req := range CredentialRequests {
+		authName := req.GetAuthName()
+		_, found := ar[authName]
+		if (found) {
+			panic(fmt.Errorf("multiple authentication methods with the name `%s` were found - confirm that all implementations of `GetAuthName` are unique", authName))
+		}
+		ar[authName] = reflect.TypeOf(req)
+	}
+	return ar
+}
+
+const (
+   AuthTagSize = 4
+)
+
 type (
+	AuthTag [AuthTagSize]byte
+
+	AuthMap map[AuthTag]reflect.Type
+
 	CredentialRequest interface {
-		InitCredentialRequest(log logging.Logger, session *drpc.Session, req_body []byte, key crypto.PrivateKey) (error)
+		InitCredentialRequest(log logging.Logger, sec_cfg *security.CredentialConfig, session *drpc.Session, req_body []byte, key crypto.PrivateKey) (error)
 		GetSignedCredential(log logging.Logger, ctx context.Context) (*Credential, error)
 		CredReqKey() string
+		GetAuthName() AuthTag
 	}
 )
+
+// CredentialRequests is a list of request types that can be used for authentication.
+// To add a new type of authentication simply implement the CredentialRequest interface and add
+// an instance to the CredentialRequests list.
+// The agent must be configured to allow an authentication method when it is initalized.
+// By default, only Unix authentication is enabled.
+var CredentialRequests = []CredentialRequest{&CredentialRequestUnix{}, &CredentialRequestAM{}}
+var AuthRegister = registerAllAuthenticationMethods()

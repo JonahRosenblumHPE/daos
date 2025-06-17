@@ -51,14 +51,14 @@ type (
 
 	// CredentialRequest defines the request parameters for GetSignedCredential.
 	CredentialRequestUnix struct {
-		DomainInfo    *security.DomainInfo
-		SigningKey    crypto.PrivateKey
+		domainInfo    *security.DomainInfo
+		signingKey    crypto.PrivateKey
 		getHostname   getHostnameFn
 		getUser       getUserFn
 		getGroup      getGroupFn
 		getGroupIds   getGroupIdsFn
 		getGroupNames getGroupNamesFn
-		ClientMap     *security.ClientUserMap
+		clientMap     *security.ClientUserMap
 	}
 )
 
@@ -104,7 +104,7 @@ func (r *CredentialRequestUnix) user() (*user.User, error) {
 	if r.getUser == nil {
 		return nil, errors.New("user lookup function not set")
 	}
-	return r.getUser(strconv.Itoa(int(r.DomainInfo.Uid())))
+	return r.getUser(strconv.Itoa(int(r.domainInfo.Uid())))
 }
 
 func (r *CredentialRequestUnix) userPrincipal() (string, error) {
@@ -119,7 +119,7 @@ func (r *CredentialRequestUnix) group() (*user.Group, error) {
 	if r.getGroup == nil {
 		return nil, errors.New("group lookup function not set")
 	}
-	return r.getGroup(strconv.Itoa(int(r.DomainInfo.Gid())))
+	return r.getGroup(strconv.Itoa(int(r.domainInfo.Gid())))
 }
 
 func (r *CredentialRequestUnix) groupPrincipal() (string, error) {
@@ -167,7 +167,7 @@ func (r *CredentialRequestUnix) WithUserAndGroup(userStr, groupStr string, group
 	}
 }
 
-func (req *CredentialRequestUnix) InitCredentialRequest(log logging.Logger, session *drpc.Session, req_body []byte, key crypto.PrivateKey) (error) {
+func (req *CredentialRequestUnix) InitCredentialRequest(log logging.Logger, sec_cfg *security.CredentialConfig, session *drpc.Session, req_body []byte, key crypto.PrivateKey) (error) {
 	if session == nil {
 		return drpc.NewFailureWithMessage("session is nil")
 	}
@@ -182,13 +182,14 @@ func (req *CredentialRequestUnix) InitCredentialRequest(log logging.Logger, sess
 		return err
 	}
 
-	req.DomainInfo = info
-	req.SigningKey = key
+	req.domainInfo = info
+	req.signingKey = key
 	req.getHostname = GetMachineName
 	req.getUser = user.LookupId
 	req.getGroup = user.LookupGroupId
 	req.getGroupIds = getGroupIds
 	req.getGroupNames = getGroupNames
+	req.clientMap = &sec_cfg.ClientUserMap
 
 	return nil
 }
@@ -200,7 +201,7 @@ func (req *CredentialRequestUnix) getSignedCredentialInternal(ctx context.Contex
 		return nil, errors.Errorf("%T is nil", req)
 	}
 
-	if req.DomainInfo == nil {
+	if req.domainInfo == nil {
 		return nil, errors.New("No domain info supplied")
 	}
 
@@ -231,7 +232,7 @@ func (req *CredentialRequestUnix) getSignedCredentialInternal(ctx context.Contex
 		User:        userPrinc,
 		Group:       groupPrinc,
 		Groups:      groupPrincs,
-		Secctx:      req.DomainInfo.Ctx()}
+		Secctx:      req.domainInfo.Ctx()}
 
 	// Marshal our AuthSys token into a byte array
 	tokenBytes, err := proto.Marshal(&sys)
@@ -242,7 +243,7 @@ func (req *CredentialRequestUnix) getSignedCredentialInternal(ctx context.Contex
 		Flavor: Flavor_AUTH_SYS,
 		Data:   tokenBytes}
 
-	verifier, err := VerifierFromToken(req.SigningKey, &token)
+	verifier, err := VerifierFromToken(req.signingKey, &token)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to generate verifier")
 	}
@@ -256,7 +257,7 @@ func (req *CredentialRequestUnix) getSignedCredentialInternal(ctx context.Contex
 		Verifier: &verifierToken,
 		Origin:   "agent"}
 
-	logging.FromContext(ctx).Tracef("%s: successfully signed credential", req.DomainInfo)
+	logging.FromContext(ctx).Tracef("%s: successfully signed credential", req.domainInfo)
 	return &credential, nil
 }
 
@@ -266,13 +267,13 @@ func (req *CredentialRequestUnix) GetSignedCredential(log logging.Logger, ctx co
 	cred, err := req.getSignedCredentialInternal(ctx)
 	if err != nil {
 		if err := func() error {
-			if !errors.Is(err, user.UnknownUserIdError(req.DomainInfo.Uid())) {
+			if !errors.Is(err, user.UnknownUserIdError(req.domainInfo.Uid())) {
 				return err
 			}
 
-			mu := req.ClientMap.Lookup(req.DomainInfo.Uid())
+			mu := req.clientMap.Lookup(req.domainInfo.Uid())
 			if mu == nil {
-				return user.UnknownUserIdError(req.DomainInfo.Uid())
+				return user.UnknownUserIdError(req.domainInfo.Uid())
 			}
 
 			req.WithUserAndGroup(mu.User, mu.Group, mu.Groups...)
@@ -283,7 +284,7 @@ func (req *CredentialRequestUnix) GetSignedCredential(log logging.Logger, ctx co
 
 			return nil
 		}(); err != nil {
-			log.Errorf("%s: failed to get user credential: %s", req.DomainInfo, err)
+			log.Errorf("%s: failed to get user credential: %s", req.domainInfo, err)
 			return nil, err
 		}
 	}
@@ -291,5 +292,9 @@ func (req *CredentialRequestUnix) GetSignedCredential(log logging.Logger, ctx co
 }
 
 func (req *CredentialRequestUnix) CredReqKey() string {
-	return fmt.Sprintf("%d:%d:%s", req.DomainInfo.Uid(), req.DomainInfo.Gid(), req.DomainInfo.Ctx())
+	return fmt.Sprintf("%d:%d:%s", req.domainInfo.Uid(), req.domainInfo.Gid(), req.domainInfo.Ctx())
+}
+
+func (req CredentialRequestUnix) GetAuthName() AuthTag {
+	return getAuthName("unix")
 }

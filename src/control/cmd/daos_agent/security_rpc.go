@@ -8,6 +8,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/pkg/errors"
@@ -52,26 +54,52 @@ type (
 		signCredential   credSignerFn
 		credCache        *credentialCache
 		config           *securityConfig
-		validAuthMethods map[drpc.Method]bool
+		validAuthMethods AuthValidSet
 	}
+
+	authArgs struct {
+		tag auth.AuthTag
+		reqBody []byte
+	}
+
+	AuthValidSet map[auth.AuthTag]bool
 )
 
 var _ cache.ExpirableItem = (*cachedCredential)(nil)
 
-func getValidAuthMethods(cfg *securityConfig) (map[drpc.Method]bool, error) {
-	var validAuthMethods = make(map[drpc.Method]bool)
+func getValidAuthMethods(cfg *securityConfig) (AuthValidSet, error) {
+	var validAuthMethods = make(AuthValidSet)
 	for _, authMethodString := range cfg.credentials.ValidAuthMethods {
-		method, err := drpc.StringToSecurityAgentMethod(authMethodString)
+		var method, err = auth.StrToAuthTag(authMethodString)
 		if (err != nil) {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to parse authentication methods specified in the agent config")
+		}
+		_, found := auth.AuthRegister[method]
+		if (!found) {
+			return nil, fmt.Errorf("found authentication method `%s`, for which no implementation exists - check that `GetAuthName` is correct, and instance exists in the `CredentialRequests` structure", authMethodString)
 		}
 		validAuthMethods[method] = true
 	}
 	if (len(cfg.credentials.ValidAuthMethods) == 0) {
 		// Default behavior with no cfg specified is that only unix auth is valid.
-		validAuthMethods[drpc.MethodRequestCredentialsUnix] = true
+		validAuthMethods[auth.CredentialRequestUnix{}.GetAuthName()] = true
 	}
 	return validAuthMethods, nil
+}
+
+func getAuthArgs(reqb []byte) (authArgs, error) {
+	var args authArgs
+	reqbSize := len(reqb)
+	if reqbSize == 0 {
+		args.tag = auth.CredentialRequestUnix{}.GetAuthName()
+	} else if (reqbSize >= auth.AuthTagSize) {
+		copy(args.tag[:], reqb)
+		args.reqBody = reqb[auth.AuthTagSize:]
+	} else {
+		return args, fmt.Errorf("auth args are length %d, expected either 0 (default/unix) or >=%d", reqbSize, auth.AuthTagSize)
+	}
+
+	return args, nil
 }
 
 // NewSecurityModule creates a new module with the given initialized TransportConfig.
@@ -161,19 +189,21 @@ func newCachedCredential(key string, cred *auth.Credential, lifetime time.Durati
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
-	_, ok := m.validAuthMethods[method]
+func (m *SecurityModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, reqb []byte) ([]byte, error) {
+	args, err := getAuthArgs(reqb)
+	if (err != nil) {
+		return nil, errors.Wrap(err, "failed to parse request body")
+	}
+
+	_, ok := m.validAuthMethods[args.tag]
 	if (!ok) {
 		return nil, errors.New("Invalid authentication method: the method requested is not allowed by the agent configuration.")
 	}
-	var req auth.CredentialRequest
+
+	var req auth.CredentialRequest = reflect.New(auth.AuthRegister[args.tag].Elem()).Interface().(auth.CredentialRequest)
 	switch method {
-		case drpc.MethodRequestCredentialsUnix:
-			req = &auth.CredentialRequestUnix{ClientMap: &m.config.credentials.ClientUserMap}
-			return m.getCredential(ctx, session, body, req)
-		case drpc.MethodRequestCredentialsAM:
-			req = &auth.CredentialRequestAM{CallerID: m.config.credentials.AMConfig.CallerID, BaseURL: m.config.credentials.AMConfig.BaseURL}
-			return m.getCredential(ctx, session, body, req)
+		case drpc.MethodRequestCredentials:
+			return m.getCredential(ctx, session, args.reqBody, req)
 	}
 
 	return nil, drpc.UnknownMethodFailure();
@@ -189,7 +219,7 @@ func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Sessio
 		return m.credRespWithStatus(daos.BadCert)
 	}
 
-	err = req.InitCredentialRequest(m.log, session, body, signingKey)
+	err = req.InitCredentialRequest(m.log, m.config.credentials, session, body, signingKey)
 	if err != nil {
 		m.log.Errorf("Unable to get credentials for client socket: %s", err)
 		return m.credRespWithStatus(daos.MiscError)

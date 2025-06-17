@@ -21,14 +21,15 @@ import (
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 type (
 	CredentialRequestAM struct {
-		DelegationCredential string
-		SigningKey           crypto.PrivateKey
-		CallerID			 string
-		BaseURL				 string
+		delegationCredential string
+		signingKey           crypto.PrivateKey
+		callerID			 string
+		baseURL				 string
 	}
 
 	AMInfo struct {
@@ -48,7 +49,7 @@ type (
 )
 
 func (r *CredentialRequestAM) request_am(ctx context.Context, apiPath string, method string, kv ...string) ([]byte, error) {
-	u, err := url.ParseRequestURI(r.BaseURL)
+	u, err := url.ParseRequestURI(r.baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("check agent config to ensure AM url is correct (can't happen: %w)", err)
 	}
@@ -61,7 +62,7 @@ func (r *CredentialRequestAM) request_am(ctx context.Context, apiPath string, me
 		params.Set(kv[i], kv[i+1])
 	}
 
-	params.Set("caller_id", r.CallerID)
+	params.Set("caller_id", r.callerID)
 	u.RawQuery = params.Encode()
 
 	request, err := http.NewRequestWithContext(
@@ -95,7 +96,7 @@ func (r *CredentialRequestAM) validateAndParseDelegationCredential() (*AMInfo, e
 	var amResp AMResp
 	var authInfo AMInfo
 
-	resp, err := r.request_am(context.Background(), "/validate", http.MethodGet, "credential", r.DelegationCredential)
+	resp, err := r.request_am(context.Background(), "/validate", http.MethodGet, "credential", r.delegationCredential)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to validate the provided credential - check AM server and agent configuration");
 	}
@@ -117,9 +118,11 @@ func (r *CredentialRequestAM) validateAndParseDelegationCredential() (*AMInfo, e
 	return &authInfo, nil;
 }
 
-func (req *CredentialRequestAM) InitCredentialRequest(log logging.Logger, session *drpc.Session, req_body []byte, key crypto.PrivateKey) (error) {
-	req.DelegationCredential = string(req_body)
-	req.SigningKey = key
+func (req *CredentialRequestAM) InitCredentialRequest(log logging.Logger, sec_cfg *security.CredentialConfig, session *drpc.Session, req_body []byte, key crypto.PrivateKey) (error) {
+	req.delegationCredential = string(req_body)
+	req.signingKey = key
+	req.callerID = sec_cfg.AMConfig.CallerID
+	req.baseURL = sec_cfg.AMConfig.BaseURL
 
 	return nil
 }
@@ -178,7 +181,7 @@ func (req *CredentialRequestAM) GetSignedCredential(log logging.Logger, ctx cont
 		Flavor: Flavor_AUTH_SYS,
 		Data:   tokenBytes}
 
-	verifier, err := VerifierFromToken(req.SigningKey, &token)
+	verifier, err := VerifierFromToken(req.signingKey, &token)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to generate verifier")
 	}
@@ -198,5 +201,9 @@ func (req *CredentialRequestAM) GetSignedCredential(log logging.Logger, ctx cont
 }
 
 func (req *CredentialRequestAM) CredReqKey() string {
-	return req.DelegationCredential
+	return req.delegationCredential
+}
+
+func (req CredentialRequestAM) GetAuthName() AuthTag {
+	return getAuthName("acma")
 }

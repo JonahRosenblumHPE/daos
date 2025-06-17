@@ -88,24 +88,12 @@ func (m securityAgentMethod) ID() int32 {
 
 func (m securityAgentMethod) String() string {
 	if s, ok := map[securityAgentMethod]string{
-		MethodRequestCredentialsUnix: "request unix credentials from the agent",
-		MethodRequestCredentialsAM: "request access manager credentials from the agent",
+		MethodRequestCredentials: "request credentials from the agent",
 	}[m]; ok {
 		return s
 	}
 
 	return fmt.Sprintf("%s:%d", m.Module(), m.ID())
-}
-
-func StringToSecurityAgentMethod(str string) (securityAgentMethod, error) {
-	if m, ok := map[string]securityAgentMethod{
-		"unix": MethodRequestCredentialsUnix,
-		"am": MethodRequestCredentialsAM,
-	}[str]; ok {
-		return m, nil
-	}
-
-	return 0, errors.New("Invalid authentication method endpoint given. Check agent configuration file.")
 }
 
 // IsValid sanity checks the Method ID is within expected bounds.
@@ -121,9 +109,7 @@ func (m securityAgentMethod) IsValid() bool {
 
 const (
 	// MethodRequestCredentialsUnix is a ModuleSecurityAgent method
-	MethodRequestCredentialsUnix securityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
-	// MethodRequestCredentialsAM is a ModuleSecurityAgent method
-	MethodRequestCredentialsAM securityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS_AM
+	MethodRequestCredentials securityAgentMethod = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
 )
 
 type MgmtMethod int32
